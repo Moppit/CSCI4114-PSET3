@@ -1,7 +1,7 @@
 import numpy as np
 import math
 
-def check_valid_board(board):
+def check_still_viable(board):
     # Get n val and its root
     n = len(board)
     root = int(math.sqrt(n))
@@ -54,6 +54,35 @@ def random_board():
 
     return board
 
+    # TODO: still sort of broken! Works for some cases but need to verify a few
+    def dpll_sudoku(board, x_idx, y_idx, cells_filled, n):
+        # Base cases: either invalid board, or filled properly
+        if not check_still_viable(board):
+            return False
+        elif cells_filled == n**2:
+            return True
+        else:
+            # Fill with a guess if not empty
+            if board[x_idx][y_idx] == 0:
+                for i in range(1, n+1):
+                    board[x_idx][y_idx] = i
+                    if x_idx < n-1:
+                        viable = dpll_sudoku(board, x_idx+1, y_idx, cells_filled+1, n)
+                    else:
+                        viable = dpll_sudoku(board, 0, y_idx+1, cells_filled+1, n)
+                    # Check if viable path -- if so, we have a solution
+                    if viable:
+                        return True
+            else:
+                if x_idx < n-1:
+                    viable = dpll_sudoku(board, x_idx+1, y_idx, cells_filled+1, n)
+                else:
+                    viable = dpll_sudoku(board, 0, y_idx+1, cells_filled+1, n)
+                # Check if viable path -- if so, we have a solution
+                if viable:
+                    return True
+        return False
+
 if __name__ == '__main__':
     # TODO: this algo mostly produces no instances I think
     # solvable = np.array([1 0 ])
@@ -61,7 +90,7 @@ if __name__ == '__main__':
     total = 1000
     for i in range(total):
         test = random_board()
-        if(check_valid_board(test)):
+        if(check_still_viable(test)):
             print(len(test), '', end='')
             if len(test) > 9:
                 print('!!! Greater than 9!')
