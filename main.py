@@ -1,5 +1,6 @@
 import numpy as np
 import math
+import os
 
 def check_still_viable(board):
     # Get n val and its root
@@ -55,16 +56,25 @@ def random_board():
     return board
 
 def dpll_sudoku(board, x_idx, y_idx, cells_filled, n):
-# Base cases: either invalid board, or filled properly
-if not check_still_viable(board):
-    return False
-elif cells_filled == n**2:
-    return True
-else:
-    # Fill with a guess if not empty
-    if board[x_idx][y_idx] == 0:
-        for i in range(1, n+1):
-            board[x_idx][y_idx] = i
+    # Base cases: either invalid board, or filled properly
+    if not check_still_viable(board):
+        return False
+    elif cells_filled == n**2:
+        return True
+    else:
+        # Fill with a guess if not empty
+        if board[x_idx][y_idx] == 0:
+            for i in range(1, n+1):
+                board[x_idx][y_idx] = i
+                if x_idx < n-1:
+                    viable = dpll_sudoku(board, x_idx+1, y_idx, cells_filled+1, n)
+                else:
+                    viable = dpll_sudoku(board, 0, y_idx+1, cells_filled+1, n)
+                # Check if viable path -- if so, we have a solution
+                if viable:
+                    return True
+            board[x_idx][y_idx] = 0
+        else:
             if x_idx < n-1:
                 viable = dpll_sudoku(board, x_idx+1, y_idx, cells_filled+1, n)
             else:
@@ -72,16 +82,69 @@ else:
             # Check if viable path -- if so, we have a solution
             if viable:
                 return True
-        board[x_idx][y_idx] = 0
-    else:
-        if x_idx < n-1:
-            viable = dpll_sudoku(board, x_idx+1, y_idx, cells_filled+1, n)
-        else:
-            viable = dpll_sudoku(board, 0, y_idx+1, cells_filled+1, n)
-        # Check if viable path -- if so, we have a solution
-        if viable:
-            return True
-return False
+    return False
+
+# This func. converts a number to a binary string representation (0b0000 = 1)
+def to_binary(n, k):
+    n = n-1
+    if n == 0:
+        return '0'*k
+    string = ''
+    while n != 0:
+        string = str(n%2) + string
+        n = n // 2
+    # Fill in remaining zeros
+    while len(string) < k:
+        string = '0' + string
+    return string
+
+# This func. takes a sudoku board and writes config to file
+def reduction(board):
+    # Open input file
+    file_to_write = open('test.in', 'w')
+    # Calculate essential constants
+    n = len(board)
+    k = math.ceil(math.log(n, 2))
+    invalid_bin_vals = [to_binary(i, k) for i in range(n+1, 2**k+1)]
+    
+    # Step 1: Go through every cell and make sure bit values are definitely not invalid
+    for r in range(n):
+        for c in range(len(board[r])):
+            for val in invalid_bin_vals:
+                str_to_write = ''
+                for bit_idx in range(k):
+                    if val[bit_idx] == '1':
+                        str_to_write += '~'
+                    str_to_write += str(r) + str(c) + str(bit_idx) + ' '
+                str_to_write += '\n'
+                # Write off string to file
+                file_to_write.write(str_to_write)
+                
+    # Step 2: Ensure each cell is different from its row, column, and local block neighbors
+    # Loop through every cell in the board
+    # For each cell, loop through its row, column, and cell
+    # Generate block of comparison code for current cell and cell to differentiate
+    # Write block of comparison code to file
+    
+    # Step 3: Encode filled in cells
+    for r in range(n):
+        for c in range(len(board[r])):
+            if board[r][c] != 0:
+                bin_val = to_binary(board[r][c], k)
+                for bit_idx in range(len(bin_val)):
+                    if bin_val[bit_idx] == '1':
+                        file_to_write.write(str(r) + str(c) + str(bit_idx) + '\n')
+                    else:
+                        file_to_write.write('~' + str(r) + str(c) + str(bit_idx) + '\n')
+    
+    file_to_write.close()
+
+# This function runs that file config -- that way we can separate terminal testing
+def run_simple_sat():
+    stream = os.popen('sat.py --input test.in')
+    output = stream.read()
+    print('output:', output, "|")
+
 
 if __name__ == '__main__':
     # TODO: this algo mostly produces no instances I think
