@@ -40,21 +40,51 @@ def random_board():
     n = np.random.randint(4,30) # Use this once you get past testing algo
     # n = np.random.randint(4,10)
     n = math.floor(math.sqrt(n))**2
-
-    # Generate board of n by n size with values up to n
-    board = np.random.randint(1, n, size=(n, n))
-
-    # Increase the number of null items (zeroes) to increase chance of solvability
-    # The minimum number of spaces that have to be filled is about 23-25% of the spaces
-    # So to ensure that we will have a board of a decent chance of solvability,
-    # we will aim for about 70% to be converted to zeroes (since some will already be zero)
-    for i in range(len(board)):
-        for j in range(len(board[i])):
-            r = np.random.rand()
-            if r < .8:
-                board[i][j] = 0
-
-    return board
+    
+    #idea for preventing immediately conflicting boards:
+    #start with empty board, 0's everywhere
+    #whatever percent p of filled squares is
+    #pick random board positions
+    #fill with random value, except check that the value is legal
+    #if not legal, either try antoher value in same cell, or just try another place altogether. idk which is more 'random'
+    
+    #n x n board filled with 0's
+    board_2 = np.zeros((n,n), dtype=int)
+    
+    #let's go for 25% filled
+    f = int(0.25 * n * n)
+    
+    #we want to fill f number of cells
+    while (f > 0):
+        f -= 1
+        
+        #random row and col, therefore a random cell
+        row = np.random.randint(0,n)
+        col = np.random.randint(0,n)
+        #value v we want to insert into cell
+        v = np.random.randint(1,n+1)
+        board_2[row,col] = v
+        
+        #counter to prevent infinite loop if a cell is impossible to legally fill for some reason
+        #idk if this will ever trigger, as an unfillable cell implies a broken board, but idk 
+        #better to be safe than sorry
+        count = 0
+        
+        #if that value fucks up the board, try a new v
+        while (check_still_viable(board_2) == False or count > n):
+            count += 1
+            
+            #try v + 1, mod n+1, so only values [0,n] are possible
+            v = (v + 1) % (n + 1)
+            
+            #v=0 makes an empty cell, so skip that value
+            if (v==0):
+                v = 1
+            
+            #reattempt value
+            board_2[row,col] = v
+    
+    return board_2
 
 def dpll_sudoku(board, x_idx, y_idx, cells_filled, n):
     # Base cases: either invalid board, or filled properly
@@ -194,7 +224,7 @@ if __name__ == '__main__':
     # TODO: this algo mostly produces no instances I think
     # solvable = np.array([1 0 ])
     count = 0
-    total = 1000
+    total = 100
     for i in range(total):
         test = random_board()
         if(check_still_viable(test)):
