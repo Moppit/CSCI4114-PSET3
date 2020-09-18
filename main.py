@@ -1,7 +1,7 @@
 import numpy as np
 import math
-import os
 from itertools import permutations
+from pysat.solvers import Glucose3
 
 def check_still_viable(board):
     # Get n val and its root
@@ -37,7 +37,7 @@ def check_still_viable(board):
 
 def random_board():
     # Generate a random number as dimension n
-    n = np.random.randint(4,30) # Use this once you get past testing algo
+    n = np.random.randint(4,16) # Use this once you get past testing algo
     # n = np.random.randint(4,10)
     n = math.floor(math.sqrt(n))**2
     
@@ -130,66 +130,81 @@ def to_binary(n, k):
     return string
 
 # This function generates a comparison block of SAT
-def gen_compare_block(lit1, lit2, k):
+def gen_compare_block_python_SAT(lit1, lit2, k):
     # Every combo of negated duos -- permutations of k literals + k negated, choose k -- but use set to filter repeats
     # Generate a string of 1's and zeros to indicate which should be negated (0's are negated)
-    block = ''
+    new_clauses = []
     all_combos = permutations('0'*k + '1'*k, k)
     bit_strs = set([''.join(i) for i in all_combos])
     
     # For each bit_str, check if 1 or 0 -- if 0, negate clause
     for bit_str in bit_strs:
+        sub_clause = []
         for bit in range(k):
+            factor = 1
             if bit_str[bit] == '0':
-                block += '~' + lit1 + str(bit) + ' ~' + lit2 + str(bit) + ' '
-            else:
-                block += lit1 + str(bit) + ' ' + lit2 + str(bit) + ' '
-        block += '\n'
-    return block
+                factor = -1
+            sub_clause.append(factor*int(lit1 + str(bit+1)))
+            sub_clause.append(factor*int(lit2 + str(bit+1)))
+        new_clauses.append(sub_clause)
+    return new_clauses
 
-# This func. takes a sudoku board and writes config to file
-def reduction(board):
-    # Open input file
-    file_to_write = open('test.in', 'w')
-    # Ensure there will never be an empty setup -- since x will not be used anywhere else
+def reduction_pythonSAT(board, g):
+    # Ensure there will never be an empty setup -- since 0 will not be used anywhere else (all clauses should hav >= 2 digits)
     # we can guarantee that it won't affect the outcome -- you can just always set to true
-    file_to_write.write('x\n')
+    g.add_clause([1])
     # Calculate essential constants
     n = len(board)
     root = int(math.sqrt(n))
     k = math.ceil(math.log(n, 2))
     invalid_bin_vals = [to_binary(i, k) for i in range(n+1, 2**k+1)]
     
+    # ORDERING STEPS FROM SMALLEST TO LARGEST CLAUSES (for unit propagation)
+    
+    # Step 1: Encode filled in cells
     for r in range(n):
         for c in range(len(board[r])):
-            
-            # Step 1: Go through every cell and make sure bit values are definitely not invalid
+            if board[r][c] != 0:
+                bin_val = to_binary(board[r][c], k)
+                for bit_idx in range(len(bin_val)):
+                    if bin_val[bit_idx] == '1':
+                        g.add_clause([int(str(r+1) + str(c+1) + str(bit_idx+1))])
+                    else:
+                        g.add_clause([-1*int(str(r+1) + str(c+1) + str(bit_idx+1))])
+    
+    # Step 2: Go through every cell and make sure bit values are definitely not invalid
+    for r in range(n):
+        for c in range(len(board[r])):
             for val in invalid_bin_vals:
-                str_to_write = ''
+                new_clause = []
                 for bit_idx in range(k):
+                    factor = 1
                     if val[bit_idx] == '1':
-                        str_to_write += '~'
-                    str_to_write += str(r) + str(c) + str(bit_idx) + ' '
-                str_to_write += '\n'
+                        factor = -1
+                    new_clause.append(factor*int(str(r+1) + str(c+1) + str(bit_idx+1)))
                 # Write off string to file
-                file_to_write.write(str_to_write)
-            
-            # Step 2: Ensure each cell is different from its row, column, and local block neighbors
-            # Loop through every cell in the board -- can probably combine this with steps 1 and 3
-            # (we don't actually have to know values though -- just use indices) [row and col = n, cell sqrt(n) x sqrt(n)]
+                g.add_clause(new_clause)
+    
+    # Step 3: Ensure each cell is different from its row, column, and local block neighbors
+    # Loop through every cell in the board -- can probably combine this with steps 1 and 3
+    # (we don't actually have to know values though -- just use indices) [row and col = n, cell sqrt(n) x sqrt(n)]
+    for r in range(n):
+        for c in range(len(board[r])):
             for row_idx in range(n):
                 if row_idx != r:
                     # Generate block of comparison code for current cell and cell to differentiate
-                    block = gen_compare_block(str(r) + str(c), str(row_idx) + str(c), k)
+                    new_clauses = gen_compare_block_python_SAT(str(r+1) + str(c+1), str(row_idx+1) + str(c+1), k)
                     # Write block of comparison code to file
-                    file_to_write.write(block)
+                    for clause in new_clauses:
+                        g.add_clause(clause)
                     
             for col_idx in range(n):
                 if col_idx != c:
                     # Generate block of comparison code for current cell and cell to differentiate
-                    block = gen_compare_block(str(r) + str(c), str(r) + str(col_idx), k)
+                    new_clauses = gen_compare_block_python_SAT(str(r+1) + str(c+1), str(r+1) + str(col_idx+1), k)
                     # Write block of comparison code to file
-                    file_to_write.write(block)
+                    for clause in new_clauses:
+                        g.add_clause(clause)
             
             # Get cell and do generation
             cell_start_r = (r // root)*root
@@ -198,46 +213,35 @@ def reduction(board):
                 for sub_col in range(cell_start_c, cell_start_c + root):
                     if sub_row != r and sub_col != c:
                         # Generate block of comparison code for current cell and cell to differentiate
-                        block = gen_compare_block(str(r) + str(c), str(sub_row) + str(sub_col), k)
+                        new_clauses = gen_compare_block_python_SAT(str(r+1) + str(c+1), str(sub_row+1) + str(sub_col+1), k)
                         # Write block of comparison code to file
-                        file_to_write.write(block)
-    
-            # Step 3: Encode filled in cells
-            if board[r][c] != 0:
-                bin_val = to_binary(board[r][c], k)
-                for bit_idx in range(len(bin_val)):
-                    if bin_val[bit_idx] == '1':
-                        file_to_write.write(str(r) + str(c) + str(bit_idx) + '\n')
-                    else:
-                        file_to_write.write('~' + str(r) + str(c) + str(bit_idx) + '\n')
-    
-    file_to_write.close()
-
-# This function runs that file config -- that way we can separate terminal testing
-def run_simple_sat():
-    stream = os.popen('sat.py --input test.in')
-    output = stream.read()
-    print('output:', output)
+                        for clause in new_clauses:
+                            g.add_clause(clause)
+    return g
 
 
 if __name__ == '__main__':
-    # TODO: this algo mostly produces no instances I think
-    # solvable = np.array([1 0 ])
-    count = 0
-    total = 100
+    countTrue = 0
+    total = 10
+    dictionary = {}
     for i in range(total):
-        test = random_board()
-        if(check_still_viable(test)):
-            print(len(test), '', end='')
-            if len(test) > 9:
-                print('!!! Greater than 9!')
-            count += 1
-    print()
-    print('Got', count, 'solvable boards out of', total)
+        test_pythonSAT = random_board()
+        g = Glucose3()
+        new_g = reduction_pythonSAT(test_pythonSAT, g)
+        
+        length = len(test_pythonSAT)
+        if length not in dictionary:
+            dictionary[length] = 1
+        else:
+            dictionary[length] += 1
+        
+        truth = new_g.solve()
+        if truth:
+            countTrue += 1
+            
+        print(length, truth)
 
-    """
-    Basically the analysis states that the number of boards out of 100 that typically
-    work is about 11-12% on average, with nearly all of them being 4x4 and a few being 9x9
-    """
+    print(countTrue, 'boards were true out of', total)
+    print(dictionary)
 
 
