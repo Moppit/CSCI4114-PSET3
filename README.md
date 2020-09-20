@@ -1,6 +1,6 @@
 # CSCI4114-PSET3
 
-NP-Complete programs are notoriously hard to solve, especially as the problem instances grow in size. However, due to years upon years of research efforts, CNF-SAT solvers have gotten incredibly good, so much so that reducing other NP-Complete problems to CNF-SAT and running them through a SAT solver has become even more efficient than optimzied algorithms specific to the chosen NP-Complete problem. 
+NP-Complete programs are notoriously hard to solve, especially as the problem instances grow in size. However, due to years of research efforts, CNF-SAT solvers have gotten incredibly good, so much so that reducing other NP-Complete problems to CNF-SAT and running them through a SAT solver has become even more efficient than optimized algorithms specific to the chosen NP-Complete problem. 
 
 This project demonstrates exactly that: the selected problem, Sudoku for dimensions of length n, is an NP-Complete problem. There are two algorithms in this repository to solve it:
 
